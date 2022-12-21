@@ -11,20 +11,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
-topic = sys.argv[1]
-
-text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
-sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
-image_path = f"images/{''.join([word.capitalize() for word in topic.split()])}"
-assets_path = f"assets/"
-video_path = f"videos/{''.join([word.capitalize() for word in topic.split()])}"
 
 
 def generate_text():
     
     prompt = f"Write me a poem that rhymes about {topic}."
     model = "text-davinci-003"
-    response = openai.Completion.create(model=model, prompt=prompt, temperature=0.7, max_tokens=200)
+    response = openai.Completion.create(model=model, prompt=prompt, temperature=0.7, max_tokens=400)
     starting_paragraph = f"""A poem about \n{topic}\nwritten by GPT-3.\n\n"""
     response = starting_paragraph + response.choices[0].text
 
@@ -123,15 +116,46 @@ def create_video():
     # Add the images of the text to the video clip
     for filenumber in range(len(os.listdir(sound_path))):
         audio = mp.AudioFileClip(f"{sound_path}/{filenumber}.mp3")
-        image = Image.open(f"{image_path}/{filenumber}.png")    
-        resize_factor = 0.5
-        image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_pos(((width - image.width * resize_factor  ) // 2, 30)).set_start(starting_point).resize(resize_factor)
+        max_width = int(width - 30)
+        scaled_height = int(max_width * 9 / 16)
+        image = Image.open(f"{image_path}/{filenumber}.png").resize((max_width, scaled_height))
+        print(width, max_width, image.width)
+        image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point)
+        image_video = image_video.resize(width=max_width)
+        image_video = image_video.set_pos(((width - image.width) // 2, 30))
+        print("image_video width:", image_video.w, "height:", image_video.h)
         starting_point += audio.duration + 1
         video = mp.CompositeVideoClip([video, image_video])
 
-    video.write_videofile(f"{video_path}/result.mp4", fps=24, codec="libx264", audio_codec="aac")
+    video.write_videofile(f"{video_path}.mp4", fps=24, codec="libx264", audio_codec="aac")
 
-generate_text()
-generate_speech()
-generate_image()
-create_video()
+
+topic = sys.argv[1]
+filename = ""
+number_of_topics = 0
+if topic == "file":
+    filename = sys.argv[2]
+    number_of_topics = int(sys.argv[3])
+
+    topics = []
+    with open(filename, "r") as f:
+        counter = 0
+        for line in f.readlines():
+            counter += 1
+            if counter >= number_of_topics:
+                break 
+            topics.append(line.strip())
+else:
+    topics = [topic]
+
+for topic in topics:
+    text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
+    sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
+    image_path = f"images/{''.join([word.capitalize() for word in topic.split()])}"
+    assets_path = f"assets/"
+    video_path = f"videos/{''.join([word.capitalize() for word in topic.split()])}"
+
+    generate_text()
+    generate_speech()
+    generate_image()
+    create_video()
