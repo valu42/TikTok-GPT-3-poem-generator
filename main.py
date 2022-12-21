@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 from mutagen.mp3 import MP3
 import random
 import moviepy.editor as mp
+from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -15,7 +16,8 @@ topic = sys.argv[1]
 text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
 sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
 image_path = f"images/{''.join([word.capitalize() for word in topic.split()])}"
-assets_path = f"assets/{''.join([word.capitalize() for word in topic.split()])}"
+assets_path = f"assets/"
+video_path = f"videos/{''.join([word.capitalize() for word in topic.split()])}"
 
 
 def generate_text():
@@ -23,7 +25,8 @@ def generate_text():
     prompt = f"Write me a poem that rhymes about {topic}."
     model = "text-davinci-003"
     response = openai.Completion.create(model=model, prompt=prompt, temperature=0.7, max_tokens=200)
-    response = response.choices[0].text
+    starting_paragraph = f"""A poem about \n{topic}\nwritten by GPT-3.\n\n"""
+    response = starting_paragraph + response.choices[0].text
 
     rows = response.split("\n")
     paragraphs_array = [[]]
@@ -57,7 +60,7 @@ def generate_speech():
     for filename in os.listdir(text_path):
         input_file = f"{text_path}/{filename}"
         output_path = f"{sound_path}/{filename.split('.')[0]}.mp3"
-        os.system(f'python text_to_speech.py -v en_us_001 -f "{input_file}" -n "{output_path}" --session {session_key}')
+        os.system(f'python3 text_to_speech.py -v en_us_001 -f "{input_file}" -n "{output_path}" --session {session_key}')
 
 def generate_image_from_text(text):
 
@@ -87,7 +90,6 @@ def generate_image():
             text = text.replace(".", "")
 
         img = generate_image_from_text(text)
-        print(f"{image_path}/{filename.split('.')[0]}.png")
         img.save(f"{image_path}/{filename.split('.')[0]}.png")
 
 def calculate_length():
@@ -95,19 +97,41 @@ def calculate_length():
     length = 0
     for filename in os.listdir(sound_path):
         audio = MP3(f"{sound_path}/{filename}")
-        length += audio.info.length
+        length += audio.info.length + 1
     return length
 
 def random_asset():
-    video = mp.VideoFileClip(random.choice(os.listdir(assets_path)))
-    
-    return video
+    video = mp.VideoFileClip(f"{assets_path}/{random.choice(os.listdir(assets_path))}")
+    length = calculate_length()
+    snipped_video = video.subclip(0, length)
+    return snipped_video
 
+def create_video():
+    assert(os.path.exists(sound_path))
+    assert(not os.path.exists(video_path))
+    print(video_path)
+    os.mkdir(video_path)
 
+    video = random_asset()
+    width, height = video.size
+    starting_point = 0
+    wanted_width = height * (1080 / 1920)
+    print(width, height, wanted_width)
+    video = video.crop(x1 = (width - wanted_width) / 2, y1 = 0, x2 = (width + wanted_width) / 2, y2 = height)
+    width = wanted_width
+
+    # Add the images of the text to the video clip
+    for filenumber in range(len(os.listdir(sound_path))):
+        audio = mp.AudioFileClip(f"{sound_path}/{filenumber}.mp3")
+        image = Image.open(f"{image_path}/{filenumber}.png")    
+        resize_factor = 0.5
+        image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_pos(((width - image.width * resize_factor  ) // 2, 30)).set_start(starting_point).resize(resize_factor)
+        starting_point += audio.duration + 1
+        video = mp.CompositeVideoClip([video, image_video])
+
+    video.write_videofile(f"{video_path}/result.mp4", fps=24, codec="libx264", audio_codec="aac")
 
 generate_text()
 generate_speech()
 generate_image()
-generate_text()
-generate_speech()
-generate_image()
+create_video()
