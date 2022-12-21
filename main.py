@@ -76,7 +76,6 @@ def generate_image_from_text(text):
     return img
 
 def generate_image():
-
     assert(os.path.exists(text_path))
     assert(not os.path.exists(image_path))
 
@@ -109,8 +108,6 @@ def random_asset():
 generate_text()
 generate_speech()
 generate_image()
-=======
 generate_text()
 generate_speech()
 generate_image()
->>>>>>> 25374e5 (saving)
