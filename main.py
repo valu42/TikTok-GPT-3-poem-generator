@@ -17,6 +17,7 @@ sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
 image_path = f"images/{''.join([word.capitalize() for word in topic.split()])}"
 assets_path = f"assets/{''.join([word.capitalize() for word in topic.split()])}"
 
+
 def generate_text():
     
     prompt = f"Write me a poem that rhymes about {topic}."
@@ -80,7 +81,7 @@ def generate_image():
     assert(not os.path.exists(image_path))
 
     os.mkdir(image_path)
-    
+
     for filename in os.listdir(text_path):
         with open(f"{text_path}/{filename}", "r") as f:
             text = f.read()
@@ -108,3 +109,8 @@ def random_asset():
 generate_text()
 generate_speech()
 generate_image()
+=======
+generate_text()
+generate_speech()
+generate_image()
+>>>>>>> 25374e5 (saving)
