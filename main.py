@@ -12,6 +12,8 @@ load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
+# The video splitting command: ffmpeg -i input.mp4 -c copy -map 0 -segment_time 00:20:00 -f segment output%03d.mp4
+
 
 def generate_text():
     
@@ -99,36 +101,51 @@ def random_asset():
     snipped_video = video.subclip(0, length)
     return snipped_video
 
-def create_video():
+def create_video(mode):
     assert(os.path.exists(sound_path))
     assert(not os.path.exists(video_path))
     print(video_path)
-    os.mkdir(video_path)
 
     video = random_asset()
     width, height = video.size
     starting_point = 0
-    wanted_width = height * (1080 / 1920)
-    print(width, height, wanted_width)
-    video = video.crop(x1 = (width - wanted_width) / 2, y1 = 0, x2 = (width + wanted_width) / 2, y2 = height)
-    width = wanted_width
+    if mode == "portrait":
+        right_width = height * (1080 / 1920)
+        video = video.crop(x1 = (width - right_width) / 2, y1 = 0, x2 = (width + right_width) / 2, y2 = height)
+        width = right_width
 
     # Add the images of the text to the video clip
     for filenumber in range(len(os.listdir(sound_path))):
         audio = mp.AudioFileClip(f"{sound_path}/{filenumber}.mp3")
-        max_width = int(width - 30)
-        scaled_height = int(max_width * 9 / 16)
-        image = Image.open(f"{image_path}/{filenumber}.png").resize((max_width, scaled_height))
-        print(width, max_width, image.width)
-        image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point)
-        image_video = image_video.resize(width=max_width)
-        image_video = image_video.set_pos(((width - image.width) // 2, 30))
+        
+        if mode == "portrait":
+            text_width = int(width - 30)
+        else:
+            text_height = int(height / 4)
+
+        image = Image.open(f"{image_path}/{filenumber}.png")
+        if mode == "portrait":
+            image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point).resize(width=text_width)
+            image_video = image_video.set_pos(((width - image.width) // 2, 30))
+        else:
+            image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point).resize(height=text_height)
+            image_video = image_video.set_pos((30, (height - image.height) // 2))
         print("image_video width:", image_video.w, "height:", image_video.h)
         starting_point += audio.duration + 1
         video = mp.CompositeVideoClip([video, image_video])
 
     video.write_videofile(f"{video_path}.mp4", fps=24, codec="libx264", audio_codec="aac")
 
+def video_from_files(mode):
+    assert(os.path.exists(image_path))
+    assert(os.path.exists(sound_path))
+    create_video(mode)
+
+def video_from_topic():
+    generate_text()
+    generate_speech()
+    generate_image()
+    create_video(mode)
 
 topic = sys.argv[1]
 filename = ""
@@ -148,6 +165,8 @@ if topic == "file":
 else:
     topics = [topic]
 
+mode = "landscape"
+
 for topic in topics:
     text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
     sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
@@ -155,7 +174,7 @@ for topic in topics:
     assets_path = f"assets/"
     video_path = f"videos/{''.join([word.capitalize() for word in topic.split()])}"
 
-    generate_text()
-    generate_speech()
-    generate_image()
-    create_video()
+    if os.path.exists(image_path) and os.path.exists(sound_path):
+        video_from_files(mode)
+    else:
+        video_from_topic(mode)
