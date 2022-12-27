@@ -101,7 +101,36 @@ def random_asset():
     snipped_video = video.subclip(0, length)
     return snipped_video
 
-def create_video(mode):
+def create_video_portrait():
+    assert(os.path.exists(sound_path))
+    assert(not os.path.exists(video_path))
+    print(video_path)
+
+    video = random_asset()
+    width, height = video.size
+    starting_point = 0
+    right_width = height * (1080 / 1920)
+    video = video.crop(x1 = (width - right_width) / 2, y1 = 0, x2 = (width + right_width) / 2, y2 = height)
+    width = video.size[0]
+
+    # Add the images of the text to the video clip
+    for filenumber in range(len(os.listdir(sound_path))):
+        audio = mp.AudioFileClip(f"{sound_path}/{filenumber}.mp3")
+        text_width = int(width - 30)
+
+        image = Image.open(f"{image_path}/{filenumber}.png")
+
+        image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point).resize(width=text_width)
+        print(width, image_video.size[0], text_width, image.width, (width - image.width) // 2)
+        image_video = image_video.set_pos(((width - image_video.w) // 2, 30))
+
+        starting_point += audio.duration + 1
+        video = mp.CompositeVideoClip([video, image_video])
+
+    video.write_videofile(f"{video_path}.mp4", fps=24, codec="libx264", audio_codec="aac")
+
+
+def create_video_landscape():
     assert(os.path.exists(sound_path))
     assert(not os.path.exists(video_path))
     print(video_path)
@@ -139,13 +168,21 @@ def create_video(mode):
 def video_from_files(mode):
     assert(os.path.exists(image_path))
     assert(os.path.exists(sound_path))
-    create_video(mode)
+    if mode == "portrait":
+        create_video_portrait()
+    else:
+        create_video_portrait()
 
-def video_from_topic():
+def video_from_topic(mode):
     generate_text()
     generate_speech()
     generate_image()
-    create_video(mode)
+    if mode == "portrait":
+        create_video_portrait()
+    else:
+        create_video_landscape()
+
+
 
 topic = sys.argv[1]
 filename = ""
@@ -165,7 +202,7 @@ if topic == "file":
 else:
     topics = [topic]
 
-mode = "landscape"
+mode = "portrait"
 
 for topic in topics:
     text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
