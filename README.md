@@ -1,8 +1,4 @@
-# Project Title
-
-TikTok GPT-3 Poem Generator
-
-## Introduction
+# TikTok GPT-3 Poem Generator
 
 ## Introduction
 
