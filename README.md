@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is a project designed for automated poetry video generation. The program uses GPT-3 for generating poems with a given theme. The primary script `main.py` overlays these poems onto videos and employs `text_to_speech.py` for narration (The code is from https://github.com/oscie57/tiktok-voice). Additionally, `combine.py` allows for the assembly of these individual videos into compilations. I got this idea from seeing automated Reddit TTS video generator ( https://github.com/HA6Bots/Automatic-Youtube-Reddit-Text-To-Speech-Video-Generator-and-Uploader)
+This is a project designed for automated poetry video generation. The program uses GPT-3 for generating poems with a given theme. The primary script `main.py` overlays these poems onto videos and OpenAI TTS for narration. Additionally, `combine.py` allows for the assembly of these individual videos into compilations. I got this idea from seeing automated Reddit TTS video generator ( https://github.com/HA6Bots/Automatic-Youtube-Reddit-Text-To-Speech-Video-Generator-and-Uploader)
 
 
 ## Table of Contents

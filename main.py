@@ -1,27 +1,37 @@
 import os
+from openai import OpenAI
 import openai
 import sys
 from PIL import Image, ImageDraw, ImageFont
 from mutagen.mp3 import MP3
 import random
 import moviepy.editor as mp
+import re
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 from dotenv import load_dotenv
 load_dotenv()
 
-openai.api_key = os.getenv('OPENAI_API_KEY')
+from pathlib import Path
 
+OpenAI.api_key = os.getenv('OPENAI_API_KEY')
+
+client = OpenAI()
+client.api_key = os.getenv('OPENAI_API_KEY')
 # The video splitting command: ffmpeg -i input.mp4 -c copy -map 0 -segment_time 00:20:00 -f segment output%03d.mp4
 
 
 def generate_text():
+    messages = [
+		{"role": "system", "content": "You are a poet. You make poems that rhyme and you are creative with your words. You don't use any trivial rhymes and your language is playful. You don't respond anything that's not a poem."},
+		{"role": "user", "content": f"Write me a poem that rhymes about {topic}. <ignore> {details}"},
+	]
+    model = "gpt-3.5-turbo"
+    response = client.chat.completions.create(model=model, messages=messages, temperature=0.7, max_tokens=400)
     
-    prompt = f"Write me a poem that rhymes about {topic}."
-    model = "text-davinci-003"
-    response = openai.Completion.create(model=model, prompt=prompt, temperature=0.7, max_tokens=400)
-    starting_paragraph = f"""A poem about \n{topic}\nwritten by GPT-3.\n\n"""
-    response = starting_paragraph + response.choices[0].text
+    starting_paragraph = f"""A poem about \n{topic}\nwritten by GPT.\n\n"""
+    print(response.choices[0].message.content)
+    response = starting_paragraph + str(response.choices[0].message.content).split("<ignore>")[0]
 
     rows = response.split("\n")
     paragraphs_array = [[]]
@@ -54,24 +64,64 @@ def generate_speech():
 
     for filename in os.listdir(text_path):
         input_file = f"{text_path}/{filename}"
+        input_text = ""
+        with open(input_file, "r") as f:
+            input_text = f.read()
         output_path = f"{sound_path}/{filename.split('.')[0]}.mp3"
-        os.system(f'python3 text_to_speech.py -v en_us_001 -f "{input_file}" -n "{output_path}" --session {session_key}')
+        speech_file_path = Path(__file__).parent / text_path / filename
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=input_text
+        )
+        response.stream_to_file(output_path)
+        
+        #os.system(f'python3 text_to_speech.py -v en_us_001 -f "{input_file}" -n "{output_path}" --session {session_key}')
+
+from PIL import Image, ImageDraw, ImageFont
+import os
 
 def generate_image_from_text(text):
-
     width = 1024
     height = 1024
     
-    img = Image.new('RGB', (width, height), color="white")
+    # Create an image with a transparent background
+    img = Image.new('RGBA', (width, height), color=(255, 255, 255, 0))
+    
+    # Choose a font and size
     font = ImageFont.truetype("arial.ttf", 20)
+    
+    # Prepare the draw object
     imgDraw = ImageDraw.Draw(img)
+    
+    # Calculate text size
     textWidth, textHeight = imgDraw.textsize(text, font=font)
+    
+    # Define buffer space around text
     widthBuffer, heightBuffer = 20, 40
-    left, top, right, bottom = 0, 0, textWidth + 2*widthBuffer, textHeight + 2*heightBuffer
-    imgDraw.text((widthBuffer,heightBuffer), text, font=font, fill="black")
+    
+    # Calculate coordinates for the text (centered)
+    x = (width - textWidth) / 2
+    y = (height - textHeight) / 2
+    
+    # Draw semi-transparent rectangle behind text for better contrast
+    rectangle_margin = 10  # Adjust as needed
+    rectangle_background = (0, 0, 0, 128)  # Semi-transparent black
+    imgDraw.rectangle(
+        (x - rectangle_margin, y - rectangle_margin,
+         x + textWidth + rectangle_margin, y + textHeight + rectangle_margin),
+        fill=rectangle_background
+    )
+    
+    # Draw the text onto the image
+    imgDraw.text((x, y), text, font=font, fill="white")
+    
+    # Crop the image to fit the text
+    left, top, right, bottom = x - widthBuffer, y - heightBuffer, x + textWidth + widthBuffer, y + textHeight + heightBuffer
     img = img.crop((left, top, right, bottom))
 
     return img
+
 
 def generate_image():
     assert(os.path.exists(text_path))
@@ -91,6 +141,7 @@ def calculate_length():
     # Calculates the length of the sound files in seconds
     length = 0
     for filename in os.listdir(sound_path):
+        print(f"{sound_path}/{filename}")
         audio = MP3(f"{sound_path}/{filename}")
         length += audio.info.length + 1
     return length
@@ -100,6 +151,8 @@ def random_asset():
     length = calculate_length()
     snipped_video = video.subclip(0, length)
     return snipped_video
+
+
 
 def create_video_portrait():
     assert(os.path.exists(sound_path))
@@ -122,12 +175,13 @@ def create_video_portrait():
 
         image_video = mp.ImageClip(f"{image_path}/{filenumber}.png").set_duration(audio.duration).set_audio(audio).set_start(starting_point).resize(width=text_width)
         print(width, image_video.size[0], text_width, image.width, (width - image.width) // 2)
-        image_video = image_video.set_pos(((width - image_video.w) // 2, 30))
+        image_video = image_video.set_pos(((width - image_video.w) // 2,100))
 
         starting_point += audio.duration + 1
         video = mp.CompositeVideoClip([video, image_video])
 
     video.write_videofile(f"{video_path}.mp4", fps=24, codec="libx264", audio_codec="aac")
+
 
 
 def create_video_landscape():
@@ -165,6 +219,7 @@ def create_video_landscape():
 
     video.write_videofile(f"{video_path}.mp4", fps=24, codec="libx264", audio_codec="aac")
 
+
 def video_from_files(mode):
     assert(os.path.exists(image_path))
     assert(os.path.exists(sound_path))
@@ -183,8 +238,12 @@ def video_from_topic(mode):
         create_video_landscape()
 
 
-
 topic = sys.argv[1]
+if len(sys.argv) > 2:
+    details = sys.argv[2]
+else:
+    details = ""
+
 filename = ""
 number_of_topics = 0
 if topic == "file":
@@ -204,12 +263,22 @@ else:
 
 mode = "portrait"
 
+def clean_up(string):
+    pattern = r'[^a-zA-Z0-9 ]'
+    
+    # Replace matched characters with an empty string
+    cleaned_string = re.sub(pattern, '', string)
+    
+    return ''.join(cleaned_string)
+
 for topic in topics:
-    text_path = f"texts/{''.join([word.capitalize() for word in topic.split()])}"
-    sound_path = f"sounds/{''.join([word.capitalize() for word in topic.split()])}"
-    image_path = f"images/{''.join([word.capitalize() for word in topic.split()])}"
+    topic_cleaned = clean_up(topic)
+
+    text_path = f"texts/{topic_cleaned}"
+    sound_path = f"sounds/{topic_cleaned}"
+    image_path = f"images/{topic_cleaned}"
     assets_path = f"assets/"
-    video_path = f"videos/{''.join([word.capitalize() for word in topic.split()])}"
+    video_path = f"videos/{topic_cleaned}"
 
     if os.path.exists(image_path) and os.path.exists(sound_path):
         video_from_files(mode)
